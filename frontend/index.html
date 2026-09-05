@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScoutAI — Student Opportunity Discovery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="logo">
+        <span class="logo-icon">🎯</span>
+        <h1>ScoutAI</h1>
+      </div>
+      <p class="tagline">Discover internships and hackathons tailored precisely to your profile</p>
+    </header>
+
+    <main class="main-content">
+      <!-- Section 1: Student Profile Form -->
+      <section class="card form-card">
+        <h2>Student Profile</h2>
+        <form id="profile-form" novalidate>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="name">Full Name <span class="required">*</span></label>
+              <input type="text" id="name" placeholder="e.g. Alex Smith" required>
+            </div>
+
+            <div class="form-group">
+              <label for="degree">Degree</label>
+              <input type="text" id="degree" placeholder="e.g. B.Tech" value="B.Tech">
+            </div>
+
+            <div class="form-group">
+              <label for="department">Department</label>
+              <input type="text" id="department" placeholder="e.g. Computer Science" value="Computer Science">
+            </div>
+
+            <div class="form-group">
+              <label for="year">Year of Study <span class="required">*</span></label>
+              <select id="year" required>
+                <option value="1">1st Year</option>
+                <option value="2">2nd Year</option>
+                <option value="3" selected>3rd Year</option>
+                <option value="4">4th Year</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="cgpa">CGPA <span class="required">*</span></label>
+              <input type="number" id="cgpa" step="0.01" min="0" max="10" placeholder="e.g. 8.50" value="8.5" required>
+            </div>
+
+            <div class="form-group">
+              <label for="location">Preferred Location</label>
+              <input type="text" id="location" placeholder="e.g. Remote, Bangalore" value="Remote">
+            </div>
+
+            <div class="form-group full-width">
+              <label for="skills">Skills (comma-separated) <span class="required">*</span></label>
+              <input type="text" id="skills" placeholder="e.g. Python, FastAPI, Machine Learning, MongoDB" value="Python, FastAPI, Machine Learning" required>
+            </div>
+
+            <div class="form-group full-width">
+              <label for="interests">Interests (comma-separated)</label>
+              <input type="text" id="interests" placeholder="e.g. Web Development, AI Agents, Hackathons" value="AI Agents, Hackathons">
+            </div>
+          </div>
+
+          <div id="validation-error" class="validation-message hidden"></div>
+
+          <button type="submit" id="submit-btn" class="btn-primary">
+            <span>Find Opportunities</span>
+          </button>
+        </form>
+      </section>
+
+      <!-- Section 2: Loading State -->
+      <section id="loading-state" class="card loading-card hidden">
+        <div class="spinner"></div>
+        <h3>Searching for opportunities...</h3>
+        <p>ScoutAI agents are searching web listings, checking eligibility, and scoring matches.</p>
+      </section>
+
+      <!-- Section 4: Error Handling -->
+      <section id="error-state" class="card error-card hidden">
+        <div class="error-icon">⚠️</div>
+        <div class="error-content">
+          <h3>Connection Error</h3>
+          <p id="error-message">Couldn't reach ScoutAI backend — make sure the server is running at http://localhost:8000.</p>
+        </div>
+      </section>
+
+      <!-- Section 3: Results Display -->
+      <section id="results-section" class="results-section hidden">
+        <div class="results-header">
+          <h2>Matched Opportunities</h2>
+          <span id="results-count" class="count-badge">0 results</span>
+        </div>
+        <div id="results-container" class="results-grid"></div>
+      </section>
+
+      <div id="empty-state" class="card empty-card hidden">
+        <div class="empty-icon">🔍</div>
+        <h3>No matching opportunities found</h3>
+        <p>Try adjusting your skills or location criteria to broaden your search.</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

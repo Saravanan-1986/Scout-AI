@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+langgraph
+langchain-core
+langchain-anthropic
+langchain-google-genai
+google-generativeai
+anthropic
+motor
+pymongo
+tavily-python
+duckduckgo-search
+beautifulsoup4
+requests
+pydantic
+pydantic-settings
+python-dotenv
