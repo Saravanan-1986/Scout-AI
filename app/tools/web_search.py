@@ -1,53 +1,108 @@
+"""Web search tool.
+
+Search results are always restricted to the whitelisted discovery sites via
+``include_domains`` (Tavily) or ``site:`` operators (DuckDuckGo). Tavily is
+used when an API key is configured; otherwise a free DuckDuckGo fallback is
+used. Random, off-whitelist pages can never enter the pipeline.
+"""
+
 import logging
-import warnings
-from typing import Any, Dict, List
+import time
+from typing import Any, Dict, List, Optional
+
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Suppress ddgs rename warning
-warnings.filterwarnings("ignore", category=RuntimeWarning, module="duckduckgo_search")
+# Cap for how many whitelisted domains DuckDuckGo queries run individually for
+# a single query string (Tavily handles all domains in one API call).
+_MAX_DDGS_DOMAINS = 3
 
 
-def search_web(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
-    """Executes web search using Tavily API if key exists, otherwise falls back to free DuckDuckGo search."""
-    if settings.tavily_api_key and settings.tavily_api_key != "your_tavily_api_key_here":
-        try:
-            from tavily import TavilyClient
+def _dedupe(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen, out = set(), []
+    for item in results:
+        url = item.get("url", "")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        out.append(item)
+    return out
 
-            client = TavilyClient(api_key=settings.tavily_api_key)
-            response = client.search(query=query, max_results=max_results)
-            results = response.get("results", [])
-            if results:
-                logger.info(f"[Tavily] Search for '{query}' returned {len(results)} results.")
-                return [
-                    {
-                        "title": item.get("title", ""),
-                        "url": item.get("url", ""),
-                        "content": item.get("content", ""),
-                    }
-                    for item in results
-                ]
-        except Exception as e:
-            logger.warning(f"Tavily search failed for query '{query}': {e}. Falling back to DuckDuckGo.")
 
-    # Fallback to free DuckDuckGo search
+def _tavily_search(query: str, max_results: int, site_domains: Optional[List[str]]) -> Optional[List[Dict[str, Any]]]:
+    if settings.tavily_api_key in ("", "your_tavily_api_key_here"):
+        return None
+    try:
+        from tavily import TavilyClient
+
+        client = TavilyClient(api_key=settings.tavily_api_key)
+        kwargs: Dict[str, Any] = {"query": query, "max_results": max_results}
+        if site_domains:
+            kwargs["include_domains"] = site_domains
+        response = client.search(**kwargs)
+        results = [
+            {
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "content": item.get("content", ""),
+                "source": "tavily",
+            }
+            for item in response.get("results", [])
+        ]
+        logger.info("[Tavily] '%s' returned %d results (domains=%s).", query, len(results), site_domains)
+        return results
+    except Exception as e:
+        logger.warning("[Tavily] Search failed for '%s': %s", query, e)
+        return None
+
+
+def _ddgs_search(query: str, max_results: int, site_domains: Optional[List[str]]) -> List[Dict[str, Any]]:
     try:
         try:
             from ddgs import DDGS
         except ImportError:
             from duckduckgo_search import DDGS
-
-        results = list(DDGS().text(query, max_results=max_results))
-        logger.info(f"[DuckDuckGo] Search for '{query}' returned {len(results)} results.")
-        return [
-            {
-                "title": item.get("title", ""),
-                "url": item.get("href", item.get("url", "")),
-                "content": item.get("body", item.get("content", "")),
-            }
-            for item in results
-        ]
-    except Exception as e:
-        logger.error(f"DuckDuckGo web search failed for query '{query}': {e}")
+    except ImportError:
+        logger.error("[DuckDuckGo] ddgs package not installed; cannot search.")
         return []
+
+    results: List[Dict[str, Any]] = []
+    # DuckDuckGo handles a single site: operator reliably, so one call per domain.
+    domains = (site_domains or [None])[:_MAX_DDGS_DOMAINS] if site_domains else [None]
+    for domain in domains:
+        q = f"{query} site:{domain}" if domain else query
+        try:
+            raw = list(DDGS().text(q, max_results=max_results))
+        except Exception as e:
+            logger.warning("[DuckDuckGo] Search failed for '%s': %s", q, e)
+            continue
+        for item in raw:
+            results.append(
+                {
+                    "title": item.get("title", ""),
+                    "url": item.get("href", item.get("url", "")),
+                    "content": item.get("body", item.get("content", "")),
+                    "source": "duckduckgo",
+                }
+            )
+        if len(domains) > 1 and settings.search_delay_seconds > 0:
+            time.sleep(settings.search_delay_seconds)
+    logger.info("[DuckDuckGo] '%s' returned %d results (domains=%s).", query, len(results), site_domains)
+    return results
+
+
+def search_web(
+    query: str,
+    max_results: int = 5,
+    site_domains: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Search the web, restricted to ``site_domains`` when provided.
+
+    Returns a list of dicts: {title, url, content, source}.
+    """
+    results = _tavily_search(query, max_results, site_domains)
+    if results is None:
+        results = _ddgs_search(query, max_results, site_domains)
+    return _dedupe(results)
+

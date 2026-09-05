@@ -5,13 +5,20 @@ langchain-core
 langchain-anthropic
 langchain-google-genai
 google-generativeai
+google-genai
 anthropic
 motor
 pymongo
 tavily-python
-duckduckgo-search
+ddgs
 beautifulsoup4
+lxml
+rich
 requests
 pydantic
 pydantic-settings
 python-dotenv
+
+# Optional: enables JavaScript rendering for JS-heavy pages (run `playwright install chromium` after installing)
+# playwright
+

@@ -1,107 +1,109 @@
+"""Recommendation Agent (Agent 5).
+
+Ranks the scored opportunities and explains every recommendation using only
+verified information (score breakdown + eligibility result). An LLM is used
+when configured; otherwise a transparent rule-based explanation is generated.
+"""
+
 import logging
 from typing import Any, Dict, List
-from app.config import settings
-from app.database.models import Opportunity, StudentProfile
+
+from app.graph import trace
 from app.graph.state import AgentState
-from app.tools.match_calculator import calculate_match_score
+from app.llm import call_llm, llm_available
 
 logger = logging.getLogger(__name__)
 
+_MAX_RESULTS = 10
 
-def call_llm(prompt: str) -> str:
-    """Invokes LLM prioritizing Google Gemini or Anthropic Claude."""
-    # 1. Try Google Gemini
-    if settings.gemini_api_key and settings.gemini_api_key != "your_gemini_api_key_here":
-        try:
-            import google.generativeai as genai
 
-            genai.configure(api_key=settings.gemini_api_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content(prompt)
-            if response and response.text:
-                logger.info("[Recommender Agent] Called Google Gemini API successfully.")
-                return response.text
-        except Exception as e:
-            logger.warning(f"[Recommender Agent] Google Gemini call failed: {e}")
+def _rule_explanation(profile: Dict[str, Any], opp: Dict[str, Any]) -> str:
+    """Build an explanation purely from the score breakdown + eligibility."""
+    breakdown = (opp.get("match_score") or {}).get("breakdown", {})
+    sentences: List[str] = []
 
-    # 2. Try Anthropic Claude
-    if settings.anthropic_api_key and settings.anthropic_api_key != "your_anthropic_api_key_here":
-        try:
-            from langchain_anthropic import ChatAnthropic
-            from langchain_core.messages import HumanMessage
+    skill_note = breakdown.get("skill", {}).get("note", "")
+    if skill_note:
+        sentences.append(skill_note.rstrip("."))
+    year_note = breakdown.get("year", {}).get("note", "")
+    if year_note and "neutral" not in year_note.lower():
+        sentences.append(year_note.rstrip("."))
+    cgpa_note = breakdown.get("cgpa", {}).get("note", "")
+    if cgpa_note and "neutral" not in cgpa_note.lower():
+        sentences.append(cgpa_note.rstrip("."))
+    location_note = breakdown.get("location", {}).get("note", "")
+    if location_note and "neutral" not in location_note.lower():
+        sentences.append(location_note.rstrip("."))
 
-            llm = ChatAnthropic(
-                model="claude-3-5-sonnet-20241022",
-                anthropic_api_key=settings.anthropic_api_key,
-                temperature=0.3,
-            )
-            response = llm.invoke([HumanMessage(content=prompt)])
-            return response.content if isinstance(response.content, str) else str(response.content)
-        except Exception as e:
-            logger.warning(f"[Recommender Agent] Anthropic Claude call failed: {e}")
+    if not sentences:
+        sentences.append("The source page did not state detailed requirements, so alignment could not be verified.")
 
-    return ""
+    explanation = ". ".join(sentences) + "."
+    status = opp.get("eligibility_status", "UNKNOWN")
+    if status == "UNKNOWN":
+        explanation += " Eligibility: Unable to verify from the source page."
+    return explanation
+
+
+def _llm_explanation(profile: Dict[str, Any], opp: Dict[str, Any]) -> str:
+    score = (opp.get("match_score") or {}).get("total", 0)
+    prompt = (
+        "You are the Recommendation Agent of ScoutAI. Explain in 2 concise sentences why this "
+        "opportunity matches (or does not match) this student. Use ONLY the facts provided — "
+        "never invent requirements, deadlines or benefits.\n\n"
+        f"Student: {profile.get('degree', '')} {profile.get('department', '')}, year {profile.get('year', '')}, "
+        f"CGPA {profile.get('cgpa', '')}; skills: {', '.join(profile.get('skills') or [])}; "
+        f"interests: {', '.join(profile.get('interests') or [])}.\n"
+        f"Opportunity: {opp.get('title')} by {opp.get('organization')} ({opp.get('type')})\n"
+        f"Stated eligibility: {opp.get('eligibility', 'Not specified')[:300]}\n"
+        f"Required skills: {', '.join(opp.get('required_skills') or []) or 'not specified'}\n"
+        f"Match score: {score}/100. Eligibility status: {opp.get('eligibility_status')}\n"
+        f"Score notes: "
+        f"{'; '.join(str(v.get('note', '')) for v in (opp.get('match_score') or {}).get('breakdown', {}).values())}\n\n"
+        "Explanation:"
+    )
+    return call_llm(prompt, temperature=0.3).strip()
 
 
 def recommender_agent(state: AgentState) -> Dict[str, Any]:
-    """Recommender Agent: Scores, ranks, and generates natural language explanations for opportunities."""
-    raw_profile = state.get("student_profile", {})
-    eligible_opps = state.get("eligible_opportunities", [])
+    profile = state.get("student_profile", {})
+    opportunities = list(state.get("eligible_opportunities", []))
+    search_type = state.get("search_type", "both")
 
-    logger.info(f"[Recommender Agent] Scoring & ranking {len(eligible_opps)} opportunities.")
-
-    try:
-        student = StudentProfile(**raw_profile)
-    except Exception as e:
-        logger.error(f"[Recommender Agent] Error building StudentProfile model: {e}")
-        student = None
-
-    scored_list: List[Dict[str, Any]] = []
-
-    for opp_dict in eligible_opps:
-        opp_data = {k: v for k, v in opp_dict.items() if k not in ("is_eligible", "eligibility_reason")}
-        try:
-            opp_model = Opportunity(**opp_data)
-            if student:
-                score = calculate_match_score(student, opp_model)
-            else:
-                score = {"total_score": 0.0}
-        except Exception as e:
-            logger.warning(f"[Recommender Agent] Opportunity model parsing warning for '{opp_dict.get('title')}': {e}")
-            score = {"total_score": 50.0}
-
-        ranked_item = dict(opp_dict)
-        ranked_item["match_score"] = score
-        scored_list.append(ranked_item)
-
-    # Sort descending by match score
-    scored_list.sort(key=lambda x: x.get("match_score", {}).get("total_score", 0), reverse=True)
+    # Rank by transparent match score.
+    ranked = sorted(
+        opportunities,
+        key=lambda o: (o.get("match_score") or {}).get("total", 0),
+        reverse=True,
+    )[:_MAX_RESULTS]
 
     final_output: List[Dict[str, Any]] = []
+    use_llm = llm_available()
 
-    for item in scored_list:
-        title = item.get("title", "Opportunity")
-        score_val = item.get("match_score", {}).get("total_score", 0)
-
-        prompt = (
-            f"Student Profile: Skills={raw_profile.get('skills')}, Interests={raw_profile.get('interests')}\n"
-            f"Opportunity: {title} at {item.get('organization')}\n"
-            f"Required Skills: {item.get('skills')}\n"
-            f"Match Score: {score_val}%\n"
-            f"Eligibility Status: {item.get('eligibility_reason')}\n\n"
-            f"Write a concise 2-sentence explanation of why this opportunity matches the student and what key skill or requirement is missing or partial."
-        )
-
-        explanation = call_llm(prompt)
+    for rank, opp in enumerate(ranked, start=1):
+        opp["rank"] = rank
+        score = (opp.get("match_score") or {}).get("total", 0)
+        explanation = ""
+        if use_llm:
+            try:
+                explanation = _llm_explanation(profile, opp)
+            except Exception as e:
+                logger.warning("[Recommender] LLM explanation failed: %s", e)
         if not explanation:
-            explanation = f"Match score {score_val}%. Fits skills ({', '.join(item.get('skills', [])[:3])}) and profile criteria."
+            explanation = _rule_explanation(profile, opp)
+        opp["fit_explanation"] = explanation
+        final_output.append(opp)
 
-        item["fit_explanation"] = explanation.strip()
-        final_output.append(item)
-
-    logger.info(f"[Recommender Agent] Completed ranking. Outputting {len(final_output)} items.")
+    trace.record(
+        "recommender",
+        f"ranked top {len(final_output)} opportunities",
+        top_pick=final_output[0]["title"] if final_output else None,
+        top_score=(final_output[0].get("match_score") or {}).get("total") if final_output else None,
+    )
+    logger.info("[Recommender] Output %s ranked opportunities.", len(final_output))
 
     return {
-        "ranked_opportunities": scored_list,
+        "ranked_opportunities": ranked,
         "final_output": final_output,
+        "agent_trace": trace.get_trace(),
     }

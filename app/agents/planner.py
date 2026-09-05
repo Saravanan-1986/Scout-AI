@@ -1,89 +1,133 @@
+"""Planner Agent (Agent 1).
+
+Understands the student profile and dynamically creates a site-restricted
+search strategy. On round 2+ it receives the quality evaluator's feedback and
+generates DIFFERENT queries instead of repeating the failed ones.
+"""
+
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
+
 from app.config import settings
-from app.graph.state import AgentState
+from app.graph import trace
+from app.llm import call_llm, llm_available
+from app.tools.site_registry import get_sites
 
 logger = logging.getLogger(__name__)
 
-
-def call_llm(prompt: str) -> str:
-    """Invokes LLM prioritizing Google Gemini or Anthropic Claude."""
-    api_key = settings.gemini_api_key
-    if api_key and api_key != "your_gemini_api_key_here":
-        # 1. Try google.genai (New SDK)
-        try:
-            from google import genai
-
-            client = genai.Client(api_key=api_key)
-            response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-            if response and response.text:
-                logger.info("[Planner Agent] Called Google GenAI API (gemini-2.5-flash) successfully.")
-                return response.text
-        except Exception as e1:
-            logger.debug(f"[Planner Agent] google.genai attempt: {e1}")
-
-        # 2. Try google.generativeai (Legacy SDK)
-        try:
-            import google.generativeai as legacy_genai
-
-            legacy_genai.configure(api_key=api_key)
-            model = legacy_genai.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content(prompt)
-            if response and response.text:
-                logger.info("[Planner Agent] Called Google GenerativeAI API (gemini-1.5-flash) successfully.")
-                return response.text
-        except Exception as e2:
-            logger.warning(f"[Planner Agent] Google Gemini call failed: {e2}")
-
-    # 3. Try Anthropic Claude
-    if settings.anthropic_api_key and settings.anthropic_api_key != "your_anthropic_api_key_here":
-        try:
-            from langchain_anthropic import ChatAnthropic
-            from langchain_core.messages import HumanMessage
-
-            llm = ChatAnthropic(
-                model="claude-3-5-sonnet-20241022",
-                anthropic_api_key=settings.anthropic_api_key,
-                temperature=0.7,
-            )
-            response = llm.invoke([HumanMessage(content=prompt)])
-            return response.content if isinstance(response.content, str) else str(response.content)
-        except Exception as e3:
-            logger.warning(f"[Planner Agent] Anthropic Claude call failed: {e3}")
-
-    return ""
+_TYPE_LABELS = {"internship": "internships", "hackathon": "hackathons", "both": "internships AND hackathons/coding competitions"}
 
 
-def planner_agent(state: AgentState) -> Dict[str, Any]:
-    """Planner Agent: Generates targeted search queries using Gemini/Claude or intelligent rules."""
+def _requested_types(search_type: str) -> List[str]:
+    stype = (search_type or "both").lower()
+    if stype == "internship":
+        return ["internship"]
+    if stype in ("hackathon", "hackathons", "competition"):
+        return ["hackathon", "coding_competition"]
+    return ["internship", "hackathon", "coding_competition"]
+
+
+def _fallback_queries(profile: Dict[str, Any], search_type: str, iteration: int) -> List[str]:
+    """Profile-derived queries (no LLM needed). Templates rotate per round."""
+    skills = [s for s in (profile.get("skills") or profile.get("programming_languages") or []) if s]
+    skill = skills[0] if skills else "software"
+    interest = (profile.get("interests") or ["technology"])[0]
+    dept = profile.get("department") or "computer science"
+    year = profile.get("year") or 3
+    types = _requested_types(search_type)
+
+    queries: List[str] = []
+    if "internship" in types:
+        pool_a = [
+            f"{skill} {dept} internship for engineering students india 2026",
+            f"{interest} internship {year}rd year student stipend india",
+            f"software development internship {year} year college student remote india",
+        ]
+        pool_b = [
+            f"{dept} student summer internship india apply",
+            f"{skill} internship opening for undergraduates india",
+            f"paid technical internship {year} year {dept} students india",
+        ]
+        queries += pool_a if iteration % 2 == 1 else pool_b
+    if any(t in types for t in ("hackathon", "coding_competition")):
+        pool_a = [
+            f"{interest} hackathon 2026 india students",
+            f"coding competition 2026 college students india",
+            f"online {skill} hackathon register 2026",
+        ]
+        pool_b = [
+            f"student technical competition {year} year india 2026",
+            f"{skill} hackathon india students apply deadline",
+            f"national level coding contest college students 2026",
+        ]
+        queries += pool_a if iteration % 2 == 1 else pool_b
+    return queries
+
+
+def planner_agent(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate dynamic, profile-driven search queries for this round."""
     profile = state.get("student_profile", {})
-    skills = profile.get("skills", [])
-    interests = profile.get("interests", [])
-    degree = profile.get("degree", "")
-    department = profile.get("department", "")
+    search_type = state.get("search_type", "both")
+    iteration = state.get("iteration", 1)
+    used = list(state.get("used_queries", []))
+    quality = state.get("quality") or {}
 
-    fallback_queries = [
-        f"{skills[0] if skills else 'software'} internship 2026 {degree}",
-        f"{interests[0] if interests else 'hackathon'} competition student 2026",
-        f"{department} student internship tech hackathon",
-    ]
+    allowed_domains = sorted({s["domain"] for s in get_sites(search_type)})
 
     prompt = (
-        f"You are a search planner for ScoutAI.\n"
-        f"Student Profile:\n"
-        f"- Degree: {degree}, Department: {department}\n"
-        f"- Skills: {', '.join(skills)}\n"
-        f"- Interests: {', '.join(interests)}\n\n"
-        f"Generate 3 to 5 targeted search queries to find student internships and hackathons.\n"
-        f"Output ONLY the query strings, one per line, without numbering or bullet points."
+        "You are the Planner Agent of ScoutAI, a research agent that finds internships, "
+        "hackathons and coding competitions for college students.\n\n"
+        f"STUDENT PROFILE:\n"
+        f"- Degree/Department: {profile.get('degree', '')} {profile.get('department', '')}\n"
+        f"- Year of study: {profile.get('year', '')}\n"
+        f"- CGPA: {profile.get('cgpa', '')}\n"
+        f"- Skills: {', '.join(profile.get('skills') or [])}\n"
+        f"- Languages: {', '.join(profile.get('programming_languages') or [])}\n"
+        f"- Technologies: {', '.join(profile.get('technologies') or [])}\n"
+        f"- Interests: {', '.join(profile.get('interests') or [])}\n"
+        f"- Preferred locations: {', '.join(profile.get('preferred_locations') or [])}\n\n"
+        f"REQUESTED OPPORTUNITY TYPES: {_TYPE_LABELS.get((search_type or 'both').lower(), search_type)}\n"
+        f"The results will be filtered to these websites only: {', '.join(allowed_domains)}\n\n"
+        f"Generate {settings.max_queries_per_round} search queries a search engine can use "
+        f"to find CURRENT, real opportunity pages on those websites "
+        f"(mention topic, opportunity type, 'students', 'India' and the year where natural).\n"
     )
+    if iteration > 1 or quality:
+        previous = used or quality.get("attempted_queries") or []
+        prompt += (
+            f"\nIMPORTANT: round {iteration}. These previous queries produced insufficient results: "
+            f"{'; '.join(previous)}\n"
+            f"Feedback: {quality.get('reason', 'insufficient verified results')}.\n"
+            "Generate COMPLETELY DIFFERENT queries with new angles (different skills, formats, phrasing).\n"
+        )
+    prompt += "\nOutput ONLY the query strings, one per line, no numbering or bullets."
 
-    llm_output = call_llm(prompt)
-    if llm_output:
-        queries = [line.strip("- ").strip() for line in llm_output.strip().split("\n") if line.strip()]
-        result_queries = queries[:5] if queries else fallback_queries
-        logger.info(f"[Planner Agent] LLM generated queries: {result_queries}")
-        return {"search_queries": result_queries}
+    queries: List[str] = []
+    if llm_available():
+        raw = call_llm(prompt, temperature=0.6)
+        if raw:
+            queries = [
+                line.strip().strip("-*1234567890. ").strip()
+                for line in raw.strip().splitlines()
+                if line.strip() and len(line.strip()) > 8
+            ]
+    if not queries:
+        queries = _fallback_queries(profile, search_type, iteration)
 
-    logger.info(f"[Planner Agent] Using profile-derived fallback queries: {fallback_queries}")
-    return {"search_queries": fallback_queries}
+    # Deduplicate against everything already tried this run.
+    fresh = []
+    for q in queries:
+        ql = q.lower()
+        if ql not in {u.lower() for u in used} and q not in fresh:
+            fresh.append(q)
+    queries = fresh[: settings.max_queries_per_round]
+
+    trace.record("planner", f"round {iteration}: generated {len(queries)} search queries", queries=queries)
+    logger.info("[Planner] Round %s queries: %s", iteration, queries)
+
+    return {
+        "search_queries": queries,
+        "used_queries": used + queries,
+        "iteration": iteration,
+    }
+
