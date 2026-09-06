@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     tavily_api_key: str = ""
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "models/gemini-3.6-flash"
     anthropic_model: str = "claude-3-5-sonnet-20241022"
     enable_llm: bool = True
 

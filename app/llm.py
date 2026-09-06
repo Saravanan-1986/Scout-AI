@@ -21,6 +21,16 @@ _PLACEHOLDER_KEYS = {
 }
 
 
+def _legacy_gemini_model() -> str:
+    """Model name as expected by the legacy google.generativeai SDK.
+
+    That SDK prepends ``models/`` itself, so strip the prefix when it is
+    already present (``models/gemini-3.6-flash`` -> ``gemini-3.6-flash``) to
+    avoid a double ``models/models/...`` path.
+    """
+    return settings.gemini_model.removeprefix("models/").removeprefix("/")
+
+
 def llm_available() -> bool:
     """True when at least one LLM provider key is configured and LLMs enabled."""
     if not settings.enable_llm:
@@ -57,7 +67,7 @@ def call_llm(prompt: str, temperature: float = 0.2) -> str:
             import google.generativeai as legacy_genai
 
             legacy_genai.configure(api_key=settings.gemini_api_key)
-            model = legacy_genai.GenerativeModel(settings.gemini_model)
+            model = legacy_genai.GenerativeModel(_legacy_gemini_model())
             response = model.generate_content(prompt)
             if response and response.text:
                 logger.info("[LLM] Legacy Gemini call succeeded.")
