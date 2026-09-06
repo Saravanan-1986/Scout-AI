@@ -5,6 +5,7 @@ guarantees results come from real student-opportunity platforms instead of
 random web pages that happen to contain matching keywords.
 """
 
+from datetime import datetime
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -109,7 +110,7 @@ COMPETITION_SITES: List[Dict[str, object]] = [
     {
         "domain": "mlh.io",
         "name": "MLH",
-        "listing_url": "https://mlh.io/seasons/2026/events",
+        "listing_url": f"https://mlh.io/seasons/{datetime.now().year}/events",
         "detail_patterns": ["/event", "/events/"],
         "default_type": "hackathon",
         "priority": 2,
@@ -139,9 +140,9 @@ for _site in INTERNSHIP_SITES + COMPETITION_SITES:
 _NAV_HINTS = (
     "?page=", "/search", "/tag/", "/category/", "/categories/", "/topics/",
     "/about", "/blog", "/faq", "/privacy", "/terms", "/login", "/signin",
-    "/signup", "/register", "/jobs?", "/explore", "/company/", "/campus/",
+    "/signup", "/register", "/registration", "/jobs?", "/explore", "/company/", "/campus/",
     "utm_", "/ref/", "/feed", "/user/", "/profile", "/leaderboard", "/learn",
-    "/college/", "/community", "/courses", "/settings", "/jobs/", "share",
+    "/college/", "/community", "/courses", "/settings", "/jobs/", "share", "/onboarding",
 )
 
 
@@ -208,5 +209,52 @@ def looks_like_navigation(url: str) -> bool:
     if lowered.endswith(("#", "/")) and lowered.count("/") <= 3:
         # Bare domain root — that's the listing page itself, not a detail page.
         return True
+    return False
+
+
+# Exact aggregate/category paths per domain (a URL matching one of these is a
+# LIST of opportunities, never a single opportunity).
+_AGGREGATE_EXACT_PATHS = {
+    "unstop.com": ["/internships", "/hackathons", "/competitions"],
+    "devpost.com": ["/hackathons"],
+    "devfolio.co": ["/hackathons"],
+    "codechef.com": ["/contests"],
+    "hackerrank.com": ["/contests"],
+    "linkedin.com": ["/jobs"],
+    "in.indeed.com": ["/jobs"],
+    "wellfound.com": ["/jobs"],
+    "naukri.com": ["/internship-jobs"],
+    "hackerearth.com": ["/challenges"],
+    "mlh.io": ["/events"],
+    "internship.aicte-india.org": ["/", "/internship"],
+}
+
+
+def is_aggregate_url(url: str, site: Dict[str, object]) -> bool:
+    """True when the URL is a listing/category page, not a single opportunity."""
+    try:
+        path = urlparse(url).path.rstrip("/") or "/"
+    except Exception:
+        return False
+    domain = str(site.get("domain", ""))
+
+    if domain == "internshala.com":
+        # Real Internshala detail pages live under /internship/detail/...
+        # Everything else under /internships/... is a category list.
+        return path.startswith("/internships/") and "/internship/detail" not in path
+
+    if domain == "mlh.io":
+        return "/seasons/" in path or path.endswith("/events")
+
+    if domain == "hackerearth.com":
+        # /challenges/ and /challenges/<category>/ are lists; a real
+        # challenge has at least 3 path segments.
+        segments = [seg for seg in path.split("/") if seg]
+        return len(segments) <= 2
+
+    for aggregate in _AGGREGATE_EXACT_PATHS.get(domain, []):
+        if path == aggregate or path.startswith(aggregate + "/"):
+            # e.g. /jobs or /jobs/search -> aggregate
+            return True
     return False
 

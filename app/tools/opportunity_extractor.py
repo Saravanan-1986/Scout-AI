@@ -127,6 +127,51 @@ def _is_generic_title(title: str, site_name: str) -> bool:
     if len(title) > 110:
         return True
     return "competitions, quizzes" in t or "hackathons, scholarships" in t
+
+
+def looks_like_aggregate_title(title: str) -> bool:
+    """True when the page title is a LISTING (e.g. 'Find 34 Data Structures
+    Intern Jobs', 'Top 205 Work From Home Data Science Internships') rather
+    than a single opportunity."""
+    t = (title or "").strip().lower()
+    if not t:
+        return True
+    # "Find 34 ...", "Find 146 Best ..."
+    if re.search(r"find \d+", t):
+        return True
+    # Landing pages: "Find the best internships of your choice"
+    if re.search(r"(?:find|search) (?:the |your )?(?:best |perfect |top )?internships", t):
+        return True
+    if "internships of your choice" in t:
+        return True
+    if "competitions, quizzes" in t or "hackathons, scholarships" in t or "students and corporates" in t:
+        return True
+    if "national internship portal" in t or "internship portal by aicte" in t or "internships for aicte" in t:
+        return True
+    if "career platform" in t or re.search(r"india'?s no\.?\s?1", t):
+        return True
+    # "Top 205 ...", "Best 34 ...", "Latest 12 ..."
+    if re.search(r"\b(?:top|best|latest)\s+\d+\+?", t):
+        return True
+    # Starts with a count: "34 Data Structures Intern Jobs"
+    if re.match(r"^\d+\+?\s+", t):
+        return True
+    # "N+ Internships" anywhere, with an opportunity keyword
+    if re.search(r"\d+\+\s+", t) and any(w in t for w in ("intern", "hackathon", "job", "contests")):
+        return True
+    # Ends with "... Jobs" / "... Internships"
+    if t.endswith("intern jobs") or t.endswith("internships") and re.search(r"\d", t):
+        return True
+    if "intern jobs" in t or "jobs & internships" in t:
+        return True
+    # Bare category titles: "Information Technology Internships",
+    # "Data Science Internships" (plural with no specific company).
+    if t.endswith("internships") and " at " not in t and " — " not in t:
+        return True
+    # Devpost/other filtered category pages.
+    if " on devpost" in t or "home for hackathons" in t:
+        return True
+    return False
 def _extract_deadline(text_lower: str, original_text: str) -> str:
     """Deadline is only reported when explicitly anchored to deadline words."""
     anchored = re.search(

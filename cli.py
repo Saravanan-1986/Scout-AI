@@ -72,25 +72,42 @@ COMPONENT_LABELS = {
     "location": "Location",
 }
 
-BANNER_ART = r"""
-   ____            _    ____ _   _
-  / ___|  ___ __ _| |__/ ___| | | |_   _  __ _  __ _  ___
-  \___ \ / __/ _` | '_ \___ \ | | | | | |/ _` |/ _` |/ _ \
-   ___) | (_| (_| | |_) |__) | |_| | |_| | (_| | (_| |  __/
-  |____/ \___\__,_|_.__/____/ \__, |\__,_|\__, |\__, |\___|
-                              |___/       |___/ |___/
-"""
+# Big highlighted "SCOUT-AI" built from 7x5 block letters (generated, so the
+# alignment is always perfect — no hand-typed ASCII art to get mangled).
+_LETTER_BLOCKS = {
+    "S": [" ██████", "██     ", " ██████", "     ██", " ██████"],
+    "C": [" ██████", "██     ", "██     ", "██     ", " ██████"],
+    "O": [" ██████", "██   ██", "██   ██", "██   ██", " ██████"],
+    "U": ["██   ██", "██   ██", "██   ██", "██   ██", " ██████"],
+    "T": ["███████", "   ██  ", "   ██  ", "   ██  ", "   ██  "],
+    "A": [" ██████", "██   ██", "███████", "██   ██", "██   ██"],
+    "I": ["███████", "  ██   ", "  ██   ", "  ██   ", "███████"],
+}
+
+
+def _block_text(word: str) -> str:
+    rows = ["", "", "", "", ""]
+    for i, ch in enumerate(word):
+        cells = _LETTER_BLOCKS.get(ch, ["       "] * 5)  # unknown char = wide space
+        separator = "" if i == 0 else " "
+        for r in range(5):
+            rows[r] += separator + cells[r]
+    return "\n".join(rows)
+
+
+BANNER_ART = _block_text("SCOUT-AI")
+
+SUBTITLE = "Agentic AI · Internship & Hackathon Discovery"
 
 
 def banner() -> None:
     console.print()
+    console.print(Panel(Text(BANNER_ART, style="bold bright_cyan", justify="center"), border_style="bright_cyan", padding=(0, 1)))
     console.print(
         Panel(
-            Text(BANNER_ART, style="bold cyan", justify="center"),
-            border_style="bright_cyan",
-            padding=(0, 2),
-            subtitle="Agentic AI · Internship & Hackathon Discovery",
-            subtitle_align="center",
+            Text(SUBTITLE, style="bold bright_white on dark_cyan", justify="center"),
+            border_style="dark_cyan",
+            padding=(0, 3),
         )
     )
     console.print(

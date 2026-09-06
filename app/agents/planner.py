@@ -2,10 +2,12 @@
 
 Understands the student profile and dynamically creates a site-restricted
 search strategy. On round 2+ it receives the quality evaluator's feedback and
-generates DIFFERENT queries instead of repeating the failed ones.
+generates DIFFERENT queries instead of repeating the failed ones. Queries
+always target the CURRENT year so results are fresh, not past editions.
 """
 
 import logging
+from datetime import datetime
 from typing import Any, Dict, List
 
 from app.config import settings
@@ -29,36 +31,37 @@ def _requested_types(search_type: str) -> List[str]:
 
 def _fallback_queries(profile: Dict[str, Any], search_type: str, iteration: int) -> List[str]:
     """Profile-derived queries (no LLM needed). Templates rotate per round."""
+    year = datetime.now().year
     skills = [s for s in (profile.get("skills") or profile.get("programming_languages") or []) if s]
     skill = skills[0] if skills else "software"
     interest = (profile.get("interests") or ["technology"])[0]
     dept = profile.get("department") or "computer science"
-    year = profile.get("year") or 3
+    year_of_study = profile.get("year") or 3
     types = _requested_types(search_type)
 
     queries: List[str] = []
     if "internship" in types:
         pool_a = [
-            f"{skill} {dept} internship for engineering students india 2026",
-            f"{interest} internship {year}rd year student stipend india",
-            f"software development internship {year} year college student remote india",
+            f"{skill} {dept} internship for engineering students india {year}",
+            f"{interest} internship {year_of_study}rd year student stipend india {year}",
+            f"software development internship {year_of_study} year college student remote india {year}",
         ]
         pool_b = [
-            f"{dept} student summer internship india apply",
-            f"{skill} internship opening for undergraduates india",
-            f"paid technical internship {year} year {dept} students india",
+            f"{dept} student summer internship india {year} apply",
+            f"{skill} internship opening for undergraduates india {year}",
+            f"paid technical internship {year_of_study} year {dept} students india {year}",
         ]
         queries += pool_a if iteration % 2 == 1 else pool_b
     if any(t in types for t in ("hackathon", "coding_competition")):
         pool_a = [
-            f"{interest} hackathon 2026 india students",
-            f"coding competition 2026 college students india",
-            f"online {skill} hackathon register 2026",
+            f"{interest} hackathon {year} india students",
+            f"coding competition {year} college students india",
+            f"online {skill} hackathon register {year}",
         ]
         pool_b = [
-            f"student technical competition {year} year india 2026",
-            f"{skill} hackathon india students apply deadline",
-            f"national level coding contest college students 2026",
+            f"student technical competition {year_of_study} year india {year}",
+            f"{skill} hackathon india students apply deadline {year}",
+            f"national level coding contest college students {year}",
         ]
         queries += pool_a if iteration % 2 == 1 else pool_b
     return queries
@@ -87,7 +90,9 @@ def planner_agent(state: Dict[str, Any]) -> Dict[str, Any]:
         f"- Interests: {', '.join(profile.get('interests') or [])}\n"
         f"- Preferred locations: {', '.join(profile.get('preferred_locations') or [])}\n\n"
         f"REQUESTED OPPORTUNITY TYPES: {_TYPE_LABELS.get((search_type or 'both').lower(), search_type)}\n"
-        f"The results will be filtered to these websites only: {', '.join(allowed_domains)}\n\n"
+        f"The results will be filtered to these websites only: {', '.join(allowed_domains)}\n"
+        f"IMPORTANT: the current year is {datetime.now().year}. Only suggest queries that find "
+        f"CURRENT or UPCOMING opportunities — never past/deadline-expired editions.\n\n"
         f"Generate {settings.max_queries_per_round} search queries a search engine can use "
         f"to find CURRENT, real opportunity pages on those websites "
         f"(mention topic, opportunity type, 'students', 'India' and the year where natural).\n"

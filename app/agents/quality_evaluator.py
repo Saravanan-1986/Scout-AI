@@ -35,20 +35,22 @@ def quality_evaluator_agent(state: Dict[str, Any]) -> Dict[str, Any]:
     verified = [o for o in relevant if o.get("verified")]
     eligible = [o for o in relevant if o.get("eligibility_status") == "ELIGIBLE"]
 
-    enough = len(verified) >= settings.min_results
+    # 'enough' is based on all relevant (non-excluded) opportunities so that at
+    # least min_results real opportunities reach the final recommendations.
+    enough = len(relevant) >= settings.min_results
     can_replan = iteration < settings.max_iterations
     should_replan = not enough and can_replan
 
     if enough:
-        reason = f"{len(verified)} verified relevant opportunities reached the target of {settings.min_results}."
+        reason = f"{len(relevant)} relevant opportunities reached the target of {settings.min_results}."
     elif can_replan:
         reason = (
-            f"Only {len(verified)} verified relevant opportunities (target {settings.min_results}). "
+            f"Only {len(relevant)} relevant opportunities (target {settings.min_results}). "
             f"Asking the planner for a different search strategy."
         )
     else:
         reason = (
-            f"Only {len(verified)} verified relevant opportunities, but the maximum of "
+            f"Only {len(relevant)} relevant opportunities, but the maximum of "
             f"{settings.max_iterations} planning rounds has been reached — proceeding with what was found."
         )
 

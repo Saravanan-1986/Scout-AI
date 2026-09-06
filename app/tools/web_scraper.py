@@ -149,12 +149,15 @@ def extract_detail_links(page: Dict[str, Any], site: Dict[str, Any], cap: int = 
     from app.tools.site_registry import is_detail_url
 
     base_domain = urlparse(page.get("final_url") or page.get("url") or "").netloc
+    listing_url = str(site.get("listing_url") or "")
     out: List[str] = []
     for link in page.get("links", []):
         if looks_like_navigation(link):
             continue
         if urlparse(link).netloc != base_domain:
             continue
+        if link == listing_url or link.rstrip("/") == listing_url.rstrip("/"):
+            continue  # self-link back to the listing page
         if is_detail_url(link, site) and link not in out:
             out.append(link)
         if len(out) >= cap:

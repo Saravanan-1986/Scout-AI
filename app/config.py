@@ -16,11 +16,12 @@ class Settings(BaseSettings):
 
     # --- Agent behaviour ---
     max_iterations: int = 2          # planner rounds (1 re-plan allowed)
-    min_results: int = 5             # verified relevant opportunities needed before stopping
+    min_results: int = 8             # minimum relevant opportunities to aim for
+    max_results: int = 10            # maximum opportunities shown to the user
     max_queries_per_round: int = 4   # search queries generated per planner round
-    max_pages_per_round: int = 10    # webpages scraped per researcher round
-    max_pages_per_source: int = 4    # detail pages discovered per whitelisted site
-    max_search_results: int = 5      # results kept per search query
+    max_pages_per_round: int = 20    # webpages scraped per researcher round
+    max_pages_per_source: int = 8    # detail pages discovered per whitelisted site
+    max_search_results: int = 8      # results kept per search query
     search_delay_seconds: float = 1.0
 
     # --- Networking ---

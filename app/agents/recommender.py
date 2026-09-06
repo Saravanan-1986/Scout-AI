@@ -8,13 +8,14 @@ when configured; otherwise a transparent rule-based explanation is generated.
 import logging
 from typing import Any, Dict, List
 
+from app.config import settings
 from app.graph import trace
 from app.graph.state import AgentState
 from app.llm import call_llm, llm_available
 
 logger = logging.getLogger(__name__)
 
-_MAX_RESULTS = 10
+_MAX_RESULTS = settings.max_results  # cap (10 by default) — see app/config.py
 
 
 def _rule_explanation(profile: Dict[str, Any], opp: Dict[str, Any]) -> str:
