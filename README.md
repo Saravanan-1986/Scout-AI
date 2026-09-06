@@ -1,5 +1,13 @@
 # ScoutAI — Agentic AI for Student Internship & Hackathon Discovery
 
+
+# DEMO VIDEOS:
+
+  Terminal - https://drive.google.com/file/d/1RJGLpMMDPb4oEXV98vhlxnCRGGEaJgNc/view?usp=drive_link
+
+  Browser - https://drive.google.com/file/d/1Zuix6sbSF1hlgi3E3MBhmR3uEhbLC2NQ/view?usp=drive_link
+  
+
 ## 📌 Project Description
 
 ScoutAI is a **Agentic AI web application** designed specifically for
