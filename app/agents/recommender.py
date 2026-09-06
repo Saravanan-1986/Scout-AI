@@ -6,6 +6,7 @@ when configured; otherwise a transparent rule-based explanation is generated.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
 from app.config import settings
@@ -81,18 +82,30 @@ def recommender_agent(state: AgentState) -> Dict[str, Any]:
     final_output: List[Dict[str, Any]] = []
     use_llm = llm_available()
 
+    # Ranks are pure Python — instant.
     for rank, opp in enumerate(ranked, start=1):
         opp["rank"] = rank
-        score = (opp.get("match_score") or {}).get("total", 0)
-        explanation = ""
-        if use_llm:
-            try:
-                explanation = _llm_explanation(profile, opp)
-            except Exception as e:
-                logger.warning("[Recommender] LLM explanation failed: %s", e)
-        if not explanation:
-            explanation = _rule_explanation(profile, opp)
-        opp["fit_explanation"] = explanation
+
+    # LLM explanations ONLY for the top N ranked opportunities (Bottleneck:
+    # one Gemini call per opportunity × 10 was slow), and those few calls run
+    # CONCURRENTLY. Everything else gets the instant rule-based explanation.
+    llm_targets = ranked[: settings.llm_explain_top] if use_llm else []
+
+    def _explain(opp: Dict[str, Any]) -> str:
+        try:
+            return _llm_explanation(profile, opp)
+        except Exception as e:
+            logger.warning("[Recommender] LLM explanation failed: %s", e)
+            return ""
+
+    if llm_targets:
+        with ThreadPoolExecutor(max_workers=max(1, min(len(llm_targets), 5))) as pool:
+            for opp, explanation in zip(llm_targets, pool.map(_explain, llm_targets)):
+                opp["fit_explanation"] = explanation.strip() or _rule_explanation(profile, opp)
+
+    for opp in ranked:
+        if not opp.get("fit_explanation"):
+            opp["fit_explanation"] = _rule_explanation(profile, opp)
         final_output.append(opp)
 
     trace.record(

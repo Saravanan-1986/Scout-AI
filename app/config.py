@@ -15,17 +15,22 @@ class Settings(BaseSettings):
     enable_llm: bool = True
 
     # --- Agent behaviour ---
-    max_iterations: int = 2          # planner rounds (1 re-plan allowed)
+    max_iterations: int = 3          # planner rounds (2 re-plans allowed)
     min_results: int = 8             # minimum relevant opportunities to aim for
     max_results: int = 10            # maximum opportunities shown to the user
     max_queries_per_round: int = 4   # search queries generated per planner round
     max_pages_per_round: int = 20    # webpages scraped per researcher round
     max_pages_per_source: int = 8    # detail pages discovered per whitelisted site
     max_search_results: int = 8      # results kept per search query
-    search_delay_seconds: float = 1.0
+    search_delay_seconds: float = 0.3
+
+    # --- Performance ---
+    scrape_workers: int = 8          # concurrent page scrapes (thread pool)
+    llm_explain_top: int = 5         # LLM explanations only for the top N ranked
+    cache_hours: int = 24            # MongoDB opportunity-cache freshness window
 
     # --- Networking ---
-    request_timeout: int = 15
+    request_timeout: int = 10
 
     app_env: str = "development"
 

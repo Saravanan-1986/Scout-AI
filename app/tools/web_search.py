@@ -70,24 +70,47 @@ def _ddgs_search(query: str, max_results: int, site_domains: Optional[List[str]]
     results: List[Dict[str, Any]] = []
     # DuckDuckGo handles a single site: operator reliably, so one call per domain.
     domains = (site_domains or [None])[:_MAX_DDGS_DOMAINS] if site_domains else [None]
-    for domain in domains:
+
+    def _one(domain: Optional[str]) -> List[Dict[str, Any]]:
         q = f"{query} site:{domain}" if domain else query
         try:
-            raw = list(DDGS().text(q, max_results=max_results))
+            # timeout bounds each engine attempt; backend limits ddgs to three
+            # reliable engines (by default it also probes wikipedia/grokipedia/
+            # startpage/yahoo which are slow or useless here).
+            raw = list(
+                DDGS(timeout=6).text(
+                    q,
+                    max_results=max_results,
+                    backend="duckduckgo,google,brave",
+                )
+            )
+        except TypeError:
+            try:
+                raw = list(DDGS(timeout=6).text(q, max_results=max_results))
+            except Exception as e:
+                logger.warning("[DuckDuckGo] Search failed for '%s': %s", q, e)
+                return []
         except Exception as e:
             logger.warning("[DuckDuckGo] Search failed for '%s': %s", q, e)
-            continue
-        for item in raw:
-            results.append(
-                {
-                    "title": item.get("title", ""),
-                    "url": item.get("href", item.get("url", "")),
-                    "content": item.get("body", item.get("content", "")),
-                    "source": "duckduckgo",
-                }
-            )
-        if len(domains) > 1 and settings.search_delay_seconds > 0:
-            time.sleep(settings.search_delay_seconds)
+            return []
+        return [
+            {
+                "title": item.get("title", ""),
+                "url": item.get("href", item.get("url", "")),
+                "content": item.get("body", item.get("content", "")),
+                "source": "duckduckgo",
+            }
+            for item in raw
+        ]
+
+    if len(domains) > 1:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=len(domains)) as pool:
+            for part in pool.map(_one, domains):
+                results.extend(part)
+    else:
+        results.extend(_one(domains[0]))
     logger.info("[DuckDuckGo] '%s' returned %d results (domains=%s).", query, len(results), site_domains)
     return results
 

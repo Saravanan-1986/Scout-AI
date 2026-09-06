@@ -284,7 +284,11 @@ _EXTRACTION_SCHEMA = """{
 
 def _llm_extract(page: Dict[str, Any], combined_text: str) -> Optional[Dict[str, Any]]:
     """Ask the LLM for structured extraction; returns raw dict or None."""
-    from app.llm import call_llm, extract_json
+    from app.llm import call_llm, extract_json, llm_available
+
+    if not llm_available():
+        return None
+    combined_text = combined_text[:4000]  # keep Gemini prompts small & fast
 
     if not llm_enabled():
         return None
