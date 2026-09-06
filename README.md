@@ -131,7 +131,7 @@ better and the app much faster:
 ```dotenv
 GEMINI_API_KEY=your_gemini_key_here
 GEMINI_MODEL=models/gemini-3.6-flash
-TAVILY_API_KEY=tvly-xxxxxxxxxxxxxxxxxxxxxxxx
+TAVILY_API_KEY=your_tavily_api_key_here
 MONGODB_URI=mongodb://localhost:27017
 MONGODB_DB_NAME=scout_ai
 ```
