@@ -389,3 +389,210 @@ input:focus, select:focus {
     grid-column: span 1;
   }
 }
+
+/* ===== ScoutAI terminal-style UI additions ===== */
+
+/* Card header (terminal-mirroring layout) */
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+.header-left { min-width: 0; }
+.opp-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.3;
+}
+.score-low-35 {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+/* Details grid */
+.opp-details-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  margin: 0.75rem 0;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+.opp-details-grid .detail-item strong { color: var(--text-main); font-weight: 600; }
+.opp-details-grid .detail-item em { color: #059669; font-style: normal; font-weight: 600; }
+
+/* Required skills tags */
+.skills-section { margin: 0.9rem 0; font-size: 0.875rem; }
+.skills-list { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.45rem; }
+.skill-tag {
+  background: #eef2ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+/* Match score breakdown bars */
+.score-section {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  margin: 1rem 0;
+}
+.score-section h4, .explanation-section h4, .eligibility-section h4, .description-section h4 {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+}
+.score-bars { display: flex; flex-direction: column; gap: 0.45rem; }
+.score-row {
+  display: grid;
+  grid-template-columns: 82px 1fr 64px;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+}
+.score-label { font-weight: 600; color: var(--text-main); }
+.score-bar-container {
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.score-bar-fill { height: 100%; border-radius: 999px; transition: width 0.4s ease; }
+.score-value { color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: right; }
+.score-note {
+  grid-column: 2 / 4;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+/* Why this matches you */
+.explanation-section { margin: 0.9rem 0; }
+.fit-explanation {
+  background-color: #f8fafc;
+  border-left: 3px solid var(--primary);
+  padding: 0.7rem 1rem;
+  border-radius: 0 8px 8px 0;
+  font-size: 0.875rem;
+  color: #334155;
+}
+
+/* Eligibility verdict */
+.eligibility-section { margin: 0.9rem 0; }
+.eligibility-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  border-radius: 6px;
+  vertical-align: middle;
+}
+.eligibility-badge.eligible { background: #dcfce7; color: #166534; }
+.eligibility-badge.possibly { background: #fef3c7; color: #92400e; }
+.eligibility-badge.not-eligible { background: #fee2e2; color: #991b1b; }
+.eligibility-badge.unknown { background: #f1f5f9; color: #475569; }
+.eligibility-reason { font-size: 0.875rem; color: #334155; margin-top: 0.4rem; }
+
+/* Description */
+.description-section { margin: 0.9rem 0; }
+.description-text {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Source button */
+.card-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1rem; }
+.btn-source {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 1rem;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid var(--border);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+.btn-source:hover { background: #e2e8f0; }
+
+/* ===== Live agent trace panel ===== */
+.trace-panel {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: var(--radius);
+  margin-bottom: 1.75rem;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.trace-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.7rem 1.1rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.trace-toggle { color: #94a3b8; font-weight: 700; }
+.trace-panel.collapsed .trace-content { display: none; }
+.trace-content {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 0.75rem 1.1rem;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 0.78rem;
+}
+.trace-entry {
+  padding: 0.3rem 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.trace-details {
+  width: 100%;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  word-break: break-all;
+}
+.agent-tag {
+  font-weight: 700;
+  padding: 0.05rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+.agent-planner { background: #86198f; color: #fae8ff; }
+.agent-researcher { background: #1e40af; color: #dbeafe; }
+.agent-eligibility { background: #0e7490; color: #cffafe; }
+.agent-match_calculator { background: #a16207; color: #fef9c3; }
+.agent-quality_evaluator { background: #15803d; color: #dcfce7; }
+.agent-recommender { background: #b91c1c; color: #fee2e2; }
+.trace-action { color: #e2e8f0; }
+.trace-time { color: #64748b; margin-left: auto; }
+
+@media (max-width: 640px) {
+  .score-row { grid-template-columns: 70px 1fr 54px; }
+  .card-header { flex-direction: column; }
+}
