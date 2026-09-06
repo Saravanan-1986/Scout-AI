@@ -6,7 +6,7 @@
   Terminal - https://drive.google.com/file/d/1RJGLpMMDPb4oEXV98vhlxnCRGGEaJgNc/view?usp=drive_link
 
   Browser - https://drive.google.com/file/d/1Zuix6sbSF1hlgi3E3MBhmR3uEhbLC2NQ/view?usp=drive_link
-  
+
 
 ## 📌 Project Description
 
@@ -154,7 +154,7 @@ Fresh pull from GitHub — PowerShell / CMD on Windows:
 
 ```powershell
 # 1. Clone the repository
-git clone https://github.com/<your-user>/Scout-AI.git
+git clone https://github.com/Saravanan-1986/Scout-AI
 cd Scout-AI
 
 # 2. Create a virtual environment (first time only)
